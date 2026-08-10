@@ -1,0 +1,2 @@
+# trendradar
+daily news pages
