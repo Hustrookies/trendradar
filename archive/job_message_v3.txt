@@ -1,0 +1,36 @@
+任务：生成 TrendRadar 热点精选 H5（每期精选 15-20 条、中英双语标题，含 RSS 源，宁缺毋滥），push 到 GitHub Pages，并把链接发到微信。
+
+【第一步：确定新增候选】
+1) 读标记文件 /opt/TrendRadar/output/.oc_last_push（格式 YYYY-MM-DD HH:MM，时区 Asia/Shanghai）。若文件不存在、或其中日期不是今天，则把"上次时间"视为今天 00:00。把上次时间的 HH:MM 记为 T。
+2) 热榜候选：只读打开当天库 /opt/TrendRadar/output/news/<今天YYYY-MM-DD>.db。注意：此库 first_crawl_time 是 HH-MM 格式（连字符，如 09-30）。执行：
+   sqlite3 "file:/opt/TrendRadar/output/news/<YYYY-MM-DD>.db?mode=ro" "SELECT n.title, p.name AS platform, p.id AS pid, n.rank, n.url, n.first_crawl_time FROM news_items n JOIN platforms p ON n.platform_id=p.id WHERE n.first_crawl_time >= '<T的HH-MM形式>' AND (n.rank <= 20 OR p.id IN ('thepaper','cls-hot','wallstreetcn-hot','ifeng')) ORDER BY n.rank ASC, n.first_crawl_time DESC;"
+3) RSS 候选：只读打开 /opt/TrendRadar/output/rss/<今天YYYY-MM-DD>.db。注意：此库 first_crawl_time 是 HH:MM 格式（冒号，如 09:30）。执行：
+   sqlite3 "file:/opt/TrendRadar/output/rss/<YYYY-MM-DD>.db?mode=ro" "SELECT i.title, f.name AS source, i.url, i.first_crawl_time FROM rss_items i JOIN rss_feeds f ON i.feed_id=f.id ORDER BY i.first_crawl_time DESC;"
+   当前可用的 RSS 源共 4 个：Hacker News、CNBC 国际(财经)、France 24、NPR News。（BBC/纽约时报/德国之声/NHK/雅虎财经/Korea Herald 因网络受限不可用，忽略。）
+
+【第二步：选题（严格执行以下标准）】
+4) 每个可用 RSS 源每期至少入选 1 条：优先选该源窗口内（first_crawl_time >= T）的新条目；若窗口内没有新条目，则取该源当天最新的一条。
+5) 语义分类：把所有候选（热榜+RSS）逐条归入且仅归入一类——科技 / 财经 / 国际局势 / 国内要点 / 体育 / 其他。
+   - 体育以球类运动（足球、篮球、乒乓球、羽毛球、排球、网球等）为主；无球类候选时才考虑其他体育项目。
+   - 一条标题涉及多类时按主体归属；娱乐八卦、社会琐事、地方小事、营销话题归入"其他"并丢弃。
+6) 配额：每期总数 15-20 条（目标 18-20 条），其中科技约 40%、财经约 20%、国际局势约 20%、国内要点约 10%、体育约 10%。RSS 条目计入相应类别配额。某类别候选不足配额时，把名额让给其余类别中质量最高的候选，但总数不超过 20；合格候选总数不足 15 时按实际数量全部入选。
+7) 同类别内的入选优先级：
+   a. 权威媒体来源优先：澎湃新闻、财联社、华尔街见闻、凤凰网，以及各 RSS 源；百度热搜/今日头条/知乎/bilibili 榜单中来自官方媒体或权威机构账号的条目视同权威媒体；
+   b. 热榜按排名更高（rank 数字更小）者优先，RSS 按时间新者优先；
+   c. 同一话题跨来源重复出现时只保留一条（按 a 的优先级选来源）。
+
+【第三步：生成内容】
+8) 标题语言规则：
+   - 中文来源（热榜各平台）：标题保持中文原样，不翻译。卡片格式：
+     <div class="card"><span class="badge">来源 · 第N名</span><a href="URL" target="_blank" rel="noopener">标题原文</a></div>
+   - 非中文来源（RSS）：生成中英对照，中文翻译为主标题、英文原标题为副标题。卡片格式：
+     <div class="card"><span class="badge">来源名 · RSS</span><a href="URL" target="_blank" rel="noopener"><span class="t-main">中文翻译标题</span><span class="t-sub">英文原标题</span></a></div>
+   中文翻译要准确简洁、符合新闻标题习惯，不得编造原文没有的内容。
+9) 生成 {{CONTENT}}：按 科技→财经→国际局势→国内要点→体育 的顺序，每个类别一个 <div class="group">类别名 · N条</div>，其下依次放置卡片。{{TITLE}} 形如"热点精选 08-10 晚间档"；{{DESC}} 为一句话本期概述（点出本期最重要的 1-2 条）。
+10) 读取 /opt/trend-digest/repo/template.html，替换 {{TITLE}}、{{DESC}}、{{CONTENT}} 三个占位符，写入 /opt/trend-digest/repo/<YYYY-MM-DD-HHMM>.html，并把同样内容复制为 /opt/trend-digest/repo/index.html。
+11) 删除 /opt/trend-digest/repo 目录下修改时间超过 7 天的 <YYYY-MM-DD-HHMM>.html 旧期刊（保留 index.html、cover.png、template.html）。
+12) 提交推送：cd /opt/trend-digest/repo && git add -A && git commit -m "digest <YYYY-MM-DD-HHMM>" && GIT_ASKPASS=/root/.gh-askpass.sh git push origin main。若 push 被拒（远端有新提交），先 git pull --rebase origin main 再重新 push。
+13) 轮询发布：对 https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html 每 15 秒 curl -sI 一次，最多等 3 分钟，直到返回 200。
+14) 返回 200 后，把链接 https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html 连同 {{DESC}} 发送给我；若 3 分钟仍非 200，改发 https://hustrookies.github.io/trendradar/index.html 并注明发布可能延迟。
+15) 把当前时间（Asia/Shanghai，格式 YYYY-MM-DD HH:MM）写回 /opt/TrendRadar/output/.oc_last_push。
+16) 若本次窗口内热榜与 RSS 均无任何新增候选，回复 NO_REPLY，不生成文件、不提交、不推送。
