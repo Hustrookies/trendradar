@@ -30,7 +30,12 @@
 10) 读取 /opt/trend-digest/repo/template.html，替换 {{TITLE}}、{{DESC}}、{{CONTENT}} 三个占位符，写入 /opt/trend-digest/repo/<YYYY-MM-DD-HHMM>.html，并把同样内容复制为 /opt/trend-digest/repo/index.html。
 11) 删除 /opt/trend-digest/repo 目录下修改时间超过 7 天的 <YYYY-MM-DD-HHMM>.html 旧期刊（保留 index.html、cover.png、template.html）。
 12) 提交推送：cd /opt/trend-digest/repo && git add -A && git commit -m "digest <YYYY-MM-DD-HHMM>" && GIT_ASKPASS=/root/.gh-askpass.sh git push origin main。若 push 被拒（远端有新提交），先 git pull --rebase origin main 再重新 push。
-13) 轮询发布：对 https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html 每 15 秒 curl -sI 一次，最多等 3 分钟，直到返回 200。
-14) 返回 200 后，把链接 https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html 连同 {{DESC}} 发送给我；若 3 分钟仍非 200，改发 https://hustrookies.github.io/trendradar/index.html 并注明发布可能延迟。
+
+【第四步：发布验证（必须严格按下列方式执行）】
+13) 只用一条 shell 命令完成轮询，禁止使用 fetch/网页浏览类工具、禁止多次单独 curl。执行：
+   for i in $(seq 1 12); do code=$(curl -s -o /dev/null -w '%{http_code}' -m 15 --retry 2 "https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html"); [ "$code" = "200" ] && break; sleep 15; done; echo "final=$code"
+   这条命令自带重试与最长 3 分钟等待，一次执行完即可，不要自己再循环调用。
+14) 若输出 final=200，把链接 https://hustrookies.github.io/trendradar/<YYYY-MM-DD-HHMM>.html 连同 {{DESC}} 发送给我；若 final 仍非 200，改发 https://hustrookies.github.io/trendradar/index.html 并注明发布可能延迟。即使验证命令本身执行出错，也要按 index.html 方案兜底发出消息，不要静默结束。
+
 15) 把当前时间（Asia/Shanghai，格式 YYYY-MM-DD HH:MM）写回 /opt/TrendRadar/output/.oc_last_push。
 16) 若本次窗口内热榜与 RSS 均无任何新增候选，回复 NO_REPLY，不生成文件、不提交、不推送。
