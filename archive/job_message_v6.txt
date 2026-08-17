@@ -1,6 +1,6 @@
 任务：生成 TrendRadar 热点精选 H5（每期精选 15-20 条、中英双语标题，含 RSS 源，宁缺毋滥），push 到 GitHub Pages，并把链接发到微信。
 
-【硬性开销约束】整个任务最多只允许 2 次工具调用，且只能用 exec 工具；禁止使用 fetch/网页浏览/读文件等其它工具，禁止自行循环重试或做额外验证。不要输出完整 HTML，不要打印选题过程。
+【硬性开销约束】整个任务最多只允许 2 次 exec 调用；禁止使用 fetch/网页浏览/读文件等其它工具，禁止自行循环重试或做额外验证。不要输出完整 HTML，不要打印选题过程。
 
 【第 1 次调用：取候选】执行下面这条命令（原样执行，不要改动）：
 python3 /opt/trend-digest/repo/fetch_candidates.py --mode main
@@ -33,6 +33,7 @@ items 数组每个元素是一个入选条目：
 - RSS 来源条目：{"cat":"<类别>","badge":"<来源名> · RSS","url":"<原链接>","main":"<中文翻译标题>","sub":"<英文原标题>"}
 字段要求：cat 只能是 科技/财经/国际局势/国内要点/体育；items 顺序无所谓（脚本会自动按 科技→财经→国际局势→国内要点→体育 分组）；badge/main/sub/url 内如含双引号需转义；title 形如"热点精选 08-17 晚间档"（午间档/晚间档按当前时间选择）。
 脚本会自动完成：套模板、写 <YYYY-MM-DD-HHMM>.html 与 index.html、清理 7 天前旧刊、git commit+push（被拒自动 rebase 重推）、轮询发布状态、写回推送标记。无需你再做其它操作。
+例外：若该调用返回"still running/仍在运行"而没有脚本输出，只允许再用 process 工具等待这一次命令结束，拿到输出后按下方规则回复。
 
 【最终回复（即发给微信的消息，只输出这部分内容）】根据第 2 次调用的输出：
 - 若输出含 PUSH=ok 且 FINAL=200：输出两行——第一行 https://hustrookies.github.io/trendradar/<SLUG>.html（SLUG 取脚本输出的值），第二行 desc 概述。
